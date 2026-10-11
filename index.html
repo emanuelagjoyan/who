@@ -1,0 +1,889 @@
+<!DOCTYPE html>
+<html lang="hy">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Guess Who? Multiplayer Game (Mobile & Tablet Optimized)</title>
+
+    <!-- Firebase JS SDK (Compat Build) -->
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-database-compat.js"></script>
+
+    <style>
+        * { box-sizing: border-box; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; margin: 0; padding: 0; }
+        
+        body { 
+            background: #1a2a3a; 
+            color: white; 
+            text-align: center; 
+            padding: 10px; 
+            min-height: 100vh;
+            -webkit-tap-highlight-color: transparent;
+        }
+        
+        .box {
+            width: 100%; 
+            max-width: 980px; 
+            margin: 0 auto; 
+            background: #2c3e50; 
+            padding: 15px; 
+            border-radius: 16px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+        }
+        
+        h1 { font-size: 1.5rem; margin-bottom: 10px; }
+        .hidden { display: none !important; }
+
+        input, button, select {
+            padding: 10px 14px; 
+            font-size: 0.95rem; 
+            border-radius: 8px; 
+            border: none; 
+            margin: 4px; 
+            outline: none;
+            touch-action: manipulation;
+        }
+        
+        input[type="text"] { background: #ffffff; color: #333; font-weight: bold; text-align: center; }
+        
+        button { background: #2ece7e; color: white; font-weight: bold; cursor: pointer; transition: 0.2s transform, 0.2s background; }
+        button:hover { background: #27ae60; }
+        button:active { transform: scale(0.98); }
+        button:disabled { background: #7f8c8d !important; cursor: not-allowed !important; opacity: 0.4; transform: none !important; }
+
+        .my-selection-box {
+            background: #1a2a3a; border: 2px solid #f1c40f; border-radius: 12px;
+            padding: 10px 15px; margin-bottom: 15px; display: flex; align-items: center; justify-content: center; gap: 15px;
+        }
+        .my-selection-box img { width: 60px; height: 60px; border-radius: 10px; object-fit: cover; background: #fff; flex-shrink: 0; }
+
+        .board { 
+            display: grid; 
+            grid-template-columns: repeat(5, 1fr); 
+            gap: 10px; 
+            margin: 15px 0; 
+        }
+
+        .card { 
+            background: #34495e; 
+            border: 2px solid #3498db; 
+            border-radius: 10px; 
+            padding: 8px 4px; 
+            cursor: pointer; 
+            transition: 0.2s; 
+            user-select: none; 
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+        }
+        .card:hover { transform: scale(1.03); }
+        .card.eliminated { opacity: 0.2; filter: grayscale(100%); border-color: #7f8c8d; transform: none; }
+        .card img { width: 100%; max-width: 65px; height: auto; aspect-ratio: 1; border-radius: 8px; object-fit: cover; background: #fff; }
+        .card-title { font-size: 0.85rem; margin-top: 5px; font-weight: bold; word-break: break-word; }
+
+        .controls { background: #1a2a3a; padding: 15px; border-radius: 12px; margin-top: 15px; border: 2px solid #34495e; }
+        
+        .flex-row {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .reply-box {
+            display: flex; justify-content: center; gap: 15px; margin-top: 10px;
+        }
+        .btn-yes, .btn-no {
+            font-size: 1.2rem !important; 
+            padding: 12px 25px !important;
+            flex: 1;
+            max-width: 160px;
+            cursor: pointer !important; 
+            border-radius: 10px;
+        }
+        .btn-yes { background: #2ece7e !important; color: white !important; }
+        .btn-no { background: #e74c3c !important; color: white !important; }
+
+        .chat-box { background: #1a2a3a; padding: 12px; border-radius: 10px; max-height: 150px; overflow-y: auto; text-align: left; margin-top: 15px; font-size: 0.9rem; }
+        .chat-msg { margin: 4px 0; }
+        .status { font-size: 1.1rem; font-weight: bold; color: #f1c40f; margin: 10px 0; line-height: 1.3; }
+
+        .guess-box {
+            background: #2c3e50; border: 2px dashed #f1c40f; padding: 12px; border-radius: 10px; margin-top: 12px;
+        }
+
+        .restart-box {
+            background: #1abc9c; color: #1a2a3a; padding: 15px; border-radius: 12px; margin: 15px 0;
+            border: 2px solid #16a085;
+        }
+
+        .room-code-badge {
+            font-size: 1.5rem; color: #f1c40f; font-weight: bold; letter-spacing: 3px;
+            background: #1a2a3a; padding: 6px 14px; border-radius: 8px; display: inline-block; margin: 6px 0;
+        }
+
+        @media (max-width: 800px) {
+            .board { grid-template-columns: repeat(4, 1fr); gap: 8px; }
+            .box { padding: 12px; }
+            h1 { font-size: 1.3rem; }
+        }
+
+        @media (max-width: 550px) {
+            .board { grid-template-columns: repeat(3, 1fr); gap: 6px; }
+            .card { padding: 6px 2px; }
+            .card img { max-width: 55px; }
+            .card-title { font-size: 0.75rem; }
+            input, button, select { font-size: 0.85rem; padding: 8px 10px; }
+            .my-selection-box img { width: 50px; height: 50px; }
+            .my-selection-box { padding: 8px 12px; gap: 10px; }
+            .status { font-size: 1rem; }
+            .btn-yes, .btn-no { font-size: 1.1rem !important; padding: 10px 15px !important; }
+        }
+
+        @media (max-width: 380px) {
+            .board { grid-template-columns: repeat(2, 1fr); gap: 6px; }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="box">
+        <h1>🕵️‍♂️ Guess Who? (Գուշակիր Ով է)</h1>
+
+        <!-- SETUP SCREEN -->
+        <div id="setup">
+            <div style="background: #1a2a3a; padding: 15px; border-radius: 12px; margin-bottom: 15px;">
+                <h3>Տարբերակ A: Ստեղծել Սենյակ (Խաղացող 1)</h3>
+                <label for="category-select"><b>Ընտրիր թեման.</b> </label><br>
+                <select id="category-select" style="width: 90%; max-width: 300px;">
+                    <option value="professions">👨‍⚕️ Մասնագիտություններ (20)</option>
+                    <option value="pets">🐶 Ընտանի Կենդանիներ (20)</option>
+                    <option value="animals">🦁 Վայրի Կենդանիներ (20)</option>
+                    <option value="tools">🛠️ Գործիքներ (20)</option>
+                    <option value="countries">🇦🇲 Երկրների Դրոշներ (20)</option>
+                    <option value="food">🍎 Մրգեր և Բանջարեղեն (20)</option>
+                    <option value="vehicles">🚗 Տրանսպորտ / Մեքենաներ (20)</option>
+                    <option value="sports">⚽ Սպորտաձևեր (20)</option>
+                </select>
+                <br>
+                <button onclick="createRoom()" style="font-size: 1rem; padding: 10px 20px; margin-top: 8px;">➕ Ստեղծել Նոր Սենյակ</button>
+            </div>
+
+            <div style="background: #1a2a3a; padding: 15px; border-radius: 12px;">
+                <h3>Տարբերակ B: Միանալ Սենյակին (Խաղացող 2)</h3>
+                <div class="flex-row">
+                    <input type="text" id="join-room-code" maxlength="4" placeholder="4-նիշ ID" style="width: 120px; font-size: 1.1rem;">
+                    <button onclick="joinRoom()" style="font-size: 1rem; padding: 10px 20px; background: #3498db;">🔗 Միանալ Սենյակին</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- GAMEPLAY SCREEN -->
+        <div id="game" class="hidden">
+            
+            <div style="font-size: 1rem; color: #bdc3c7;">
+                Սենյակի ID: <span id="display-room-code" class="room-code-badge">....</span>
+            </div>
+
+            <!-- RESTART GAME PANEL -->
+            <div id="restart-box" class="restart-box hidden">
+                <h3 style="margin-bottom: 8px; font-size: 1.1rem;">🔄 Ցանկանո՞ւմ եք նորից խաղալ նույն սենյակում։</h3>
+                <select id="restart-category-select" style="background: #2c3e50; color: white; width: 90%; max-width: 280px;">
+                    <option value="professions">👨‍⚕️ Մասնագիտություններ (20)</option>
+                    <option value="pets">🐶 Ընտանի Կենդանիներ (20)</option>
+                    <option value="animals">🦁 Վայրի Կենդանիներ (20)</option>
+                    <option value="tools">🛠️ Գործիքներ (20)</option>
+                    <option value="countries">🇦🇲 Երկրների Դրոշներ (20)</option>
+                    <option value="food">🍎 Մրգեր և Բանջարեղեն (20)</option>
+                    <option value="vehicles">🚗 Տրանսպորտ / Մեքենաներ (20)</option>
+                    <option value="sports">⚽ Սպորտաձևեր (20)</option>
+                </select>
+                <br>
+                <button onclick="restartGame()" style="background: #2980b9; font-size: 1.1rem; padding: 10px 25px; margin-top: 8px;">🔄 Վերսկսել Խաղը</button>
+            </div>
+
+            <!-- PINNED SELECTED CARD -->
+            <div id="my-card-header" class="my-selection-box hidden">
+                <img id="my-card-img" src="" alt="Selected Target">
+                <div style="text-align: left;">
+                    <div style="font-size: 0.75rem; color: #bdc3c7; text-transform: uppercase;">Քո մտապահած քարտը.</div>
+                    <div style="font-size: 1.2rem; font-weight: bold; color: #f1c40f;" id="my-card-name">-</div>
+                </div>
+            </div>
+
+            <div class="status" id="status-text">Ընտրիր քո գաղտնի քարտը ցուցակից...</div>
+
+            <!-- 20-CARD GRID -->
+            <div class="board" id="board"></div>
+
+            <!-- CONTROLS CONTAINER -->
+            <div id="controls" class="controls hidden">
+                <!-- QUESTION SECTION -->
+                <div style="margin-bottom: 12px;">
+                    <h4 style="margin: 4px 0; color: #3498db; font-size: 1rem;">❓ Տուր հարց ընկերոջդ.</h4>
+                    <select id="quick-questions" onchange="applyQuickQuestion()" style="width: 95%; max-width: 400px; background: #2c3e50; color: white;">
+                        <option value="">-- Ընտրիր պատրաստի հարց կամ գրիր ինքդ --</option>
+                    </select>
+                    <div class="flex-row" style="margin-top: 6px;">
+                        <input type="text" id="question-input" placeholder="Գրիր հարցդ այստեղ..." style="flex: 1; min-width: 160px;" disabled>
+                        <button id="send-btn" onclick="sendQuestion()" disabled>Ուղարկել</button>
+                    </div>
+                </div>
+
+                <!-- DIRECT GUESS SECTION -->
+                <div class="guess-box">
+                    <h4 style="margin: 4px 0; color: #f1c40f; font-size: 1rem;">🎯 Կատարել Վերջնական Գուշակում.</h4>
+                    <div class="flex-row">
+                        <select id="guess-select" style="flex: 1; min-width: 160px; background: #1a2a3a; color: white;" disabled>
+                            <option value="">-- Ընտրիր քարտը --</option>
+                        </select>
+                        <button id="guess-btn" onclick="submitDirectGuess()" style="background: #e67e22;" disabled>🏆 Գուշակել</button>
+                    </div>
+                </div>
+
+                <hr style="border-color: #34495e; margin: 12px 0;">
+
+                <!-- REPLY SECTION -->
+                <div>
+                    <h4 style="margin: 4px 0; color: #f1c40f; font-size: 1rem;">👉 Պատասխանիր ստացված հարցին.</h4>
+                    <div id="incoming-question" style="color:#f1c40f; font-weight:bold; font-size:1.1rem; margin: 8px 0;">
+                        (Դեռ հարց չկա)
+                    </div>
+                    <div class="reply-box">
+                        <button id="btn-yes" class="btn-yes" onclick="sendAnswer('ԱՅՈ')" disabled>ԱՅՈ</button>
+                        <button id="btn-no" class="btn-no" onclick="sendAnswer('ՈՉ')" disabled>ՈՉ</button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="chat-box" id="chat"></div>
+        </div>
+    </div>
+
+<script>
+    // Firebase Config
+    const firebaseConfig = {
+        apiKey: "AIzaSyD_hv1sGX_Q8KFIa26Id-aiZZg2wNUUmwE",
+        authDomain: "grafik-system-554ec.firebaseapp.com",
+        databaseURL: "https://grafik-system-554ec-default-rtdb.firebaseio.com",
+        projectId: "grafik-system-554ec",
+        storageBucket: "grafik-system-554ec.firebasestorage.app",
+        messagingSenderId: "171412577503",
+        appId: "1:171412577503:web:be43cb5047d811cf7a9d6a",
+        measurementId: "G-TWWYGVHJZY"
+    };
+
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.database();
+
+    function createSvgImg(text, bgColor) {
+        const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100" viewBox="0 0 100 100">
+            <rect width="100" height="100" fill="${bgColor}" rx="16"/>
+            <text x="50%" y="56%" dominant-baseline="middle" text-anchor="middle" font-size="52">${text}</text>
+        </svg>`;
+        return 'data:image/svg+xml;utf8,' + encodeURIComponent(svg);
+    }
+
+    const categories = {
+        professions: [
+            { name: "Բժիշկ", img: createSvgImg("👨‍⚕️", "#e91e63") },
+            { name: "Ուսուցիչ", img: createSvgImg("👩‍🏫", "#3498db") },
+            { name: "Ոստիկան", img: createSvgImg("👮‍♂️", "#2c3e50") },
+            { name: "Հրշեջ", img: createSvgImg("👨‍🚒", "#e74c3c") },
+            { name: "Խոհարար", img: createSvgImg("👨‍🍳", "#d35400") },
+            { name: "Օդաչու", img: createSvgImg("👨‍✈️", "#2980b9") },
+            { name: "Ծրագրավորող", img: createSvgImg("👨‍💻", "#8e44ad") },
+            { name: "Դերասան", img: createSvgImg("🎭", "#f1c40f") },
+            { name: "Նկարիչ", img: createSvgImg("👩‍🎨", "#16a085") },
+            { name: "Երգիչ", img: createSvgImg("🎤", "#9b59b6") },
+            { name: "Ճարտարապետ", img: createSvgImg("📐", "#e67e22") },
+            { name: "Դատավոր", img: createSvgImg("👨‍⚖️", "#34495e") },
+            { name: "Լրագրող", img: createSvgImg("📰", "#7f8c8d") },
+            { name: "Տիեզերագնաց", img: createSvgImg("👨‍🚀", "#1abc9c") },
+            { name: "Ատամնաբույժ", img: createSvgImg("🦷", "#27ae60") },
+            { name: "Վարսահարդար", img: createSvgImg("💇‍♀️", "#e91e63") },
+            { name: "Լուսանկարիչ", img: createSvgImg("📷", "#34495e") },
+            { name: "Շինարար", img: createSvgImg("👷‍♂️", "#f39c12") },
+            { name: "Ֆուտբոլիստ", img: createSvgImg("⚽", "#27ae60") },
+            { name: "Գիտնական", img: createSvgImg("🧪", "#9b59b6") }
+        ],
+        pets: [
+            { name: "Շուն", img: createSvgImg("🐶", "#d35400") },
+            { name: "Կատու", img: createSvgImg("🐱", "#e67e22") },
+            { name: "Թութակ", img: createSvgImg("🦜", "#2ecc71") },
+            { name: "Ձի", img: createSvgImg("🐴", "#8e44ad") },
+            { name: "Կով", img: createSvgImg("🐮", "#e74c3c") },
+            { name: "Ոչխար", img: createSvgImg("🐑", "#ecf0f1") },
+            { name: "Այծ", img: createSvgImg("🐐", "#7f8c8d") },
+            { name: "Խոզ", img: createSvgImg("🐷", "#e91e63") },
+            { name: "Հավ", img: createSvgImg("🐔", "#f39c12") },
+            { name: "Բադ", img: createSvgImg("🦆", "#3498db") },
+            { name: "Ճագար", img: createSvgImg("🐰", "#1abc9c") },
+            { name: "Համստեր", img: createSvgImg("🐹", "#f1c40f") },
+            { name: "Ձուկ", img: createSvgImg("🐠", "#2980b9") },
+            { name: "Էշ", img: createSvgImg("🫏", "#95a5a6") },
+            { name: "Ծովախոզուկ", img: createSvgImg("🐹", "#d35400") },
+            { name: "Հնդկահավ", img: createSvgImg("🦃", "#c0392b") },
+            { name: "Աղավնի", img: createSvgImg("🕊️", "#34495e") },
+            { name: "Կրիա", img: createSvgImg("🐢", "#27ae60") },
+            { name: "Սագ", img: createSvgImg("🪿", "#ecf0f1") },
+            { name: "Ոզնի", img: createSvgImg("🦔", "#d35400") }
+        ],
+        animals: [
+            { name: "Առյուծ", img: createSvgImg("🦁", "#f39c12") },
+            { name: "Փիղ", img: createSvgImg("🐘", "#7f8c8d") },
+            { name: "Արջ", img: createSvgImg("🐻", "#d35400") },
+            { name: "Գայլ", img: createSvgImg("🐺", "#95a5a6") },
+            { name: "Աղվես", img: createSvgImg("🦊", "#e67e22") },
+            { name: "Ընձուղտ", img: createSvgImg("🦒", "#f1c40f") },
+            { name: "Զեբր", img: createSvgImg("🦓", "#34495e") },
+            { name: "Կապիկ", img: createSvgImg("🐵", "#e74c3c") },
+            { name: "Վագր", img: createSvgImg("🐯", "#e67e22") },
+            { name: "Սկյուռ", img: createSvgImg("🐿️", "#d35400") },
+            { name: "Օձ", img: createSvgImg("🐍", "#2ecc71") },
+            { name: "Արծիվ", img: createSvgImg("🦅", "#34495e") },
+            { name: "Դելֆին", img: createSvgImg("🐬", "#3498db") },
+            { name: "Շնաձուկ", img: createSvgImg("🦈", "#2980b9") },
+            { name: "Կենգուրու", img: createSvgImg("🦘", "#e67e22") },
+            { name: "Պանդա", img: createSvgImg("🐼", "#2c3e50") },
+            { name: "Պինգվին", img: createSvgImg("🐧", "#2980b9") },
+            { name: "Ուղտ", img: createSvgImg("🐪", "#f39c12") },
+            { name: "Կոկորդիլոս", img: createSvgImg("🐊", "#27ae60") },
+            { name: "Ռնգեղջյուր", img: createSvgImg("🦏", "#7f8c8d") }
+        ],
+        tools: [
+            { name: "Մուրճ", img: createSvgImg("🔨", "#7f8c8d") },
+            { name: "Պտուտակահան", img: createSvgImg("🪛", "#e67e22") },
+            { name: "Աքցան", img: createSvgImg("🔧", "#95a5a6") },
+            { name: "Սղոց", img: createSvgImg("🪚", "#d35400") },
+            { name: "Բանալի", img: createSvgImg("🔑", "#f1c40f") },
+            { name: "Գրտնակ", img: createSvgImg("🪵", "#e67e22") },
+            { name: "Մկրատ", img: createSvgImg("✂️", "#e74c3c") },
+            { name: "Բահ", img: createSvgImg("🪵", "#7f8c8d") },
+            { name: "Փոցխ", img: createSvgImg("🧹", "#f39c12") },
+            { name: "Կացին", img: createSvgImg("🪓", "#c0392b") },
+            { name: "Մեխ", img: createSvgImg("📍", "#bdc3c7") },
+            { name: "Հորատիչ", img: createSvgImg("⚙️", "#34495e") },
+            { name: "Անկյունաչափ", img: createSvgImg("📐", "#f1c40f") },
+            { name: "Մակարդակ", img: createSvgImg("📏", "#2ecc71") },
+            { name: "Խարտոց", img: createSvgImg("🔪", "#bdc3c7") },
+            { name: "Խոզանակ", img: createSvgImg("🖌️", "#9b59b6") },
+            { name: "Ականջակալ", img: createSvgImg("🎧", "#34495e") },
+            { name: "Լապտեր", img: createSvgImg("🔦", "#f1c40f") },
+            { name: "Կշեռք", img: createSvgImg("⚖️", "#95a5a6") },
+            { name: "Ժապավեն", img: createSvgImg("📦", "#d35400") }
+        ],
+        countries: [
+            { name: "Հայաստան", img: createSvgImg("🇦🇲", "#d35400") },
+            { name: "Ֆրանսիա", img: createSvgImg("🇫🇷", "#2980b9") },
+            { name: "Իտալիա", img: createSvgImg("🇮🇹", "#27ae60") },
+            { name: "Իսպանիա", img: createSvgImg("🇪🇸", "#c0392b") },
+            { name: "Գերմանիա", img: createSvgImg("🇩🇪", "#f39c12") },
+            { name: "ԱՄՆ", img: createSvgImg("🇺🇸", "#2980b9") },
+            { name: "Բրազիլիա", img: createSvgImg("🇧🇷", "#27ae60") },
+            { name: "Ճապոնիա", img: createSvgImg("🇯🇵", "#c0392b") },
+            { name: "Չինաստան", img: createSvgImg("🇨🇳", "#e74c3c") },
+            { name: "Հնդկաստան", img: createSvgImg("🇮🇳", "#e67e22") },
+            { name: "Եգիպտոս", img: createSvgImg("🇪🇬", "#f1c40f") },
+            { name: "Հունաստան", img: createSvgImg("🇬🇷", "#3498db") },
+            { name: "Արգենտինա", img: createSvgImg("🇦🇷", "#f1c40f") },
+            { name: "Կանադա", img: createSvgImg("🇨🇦", "#e74c3c") },
+            { name: "Ավստրալիա", img: createSvgImg("🇦🇺", "#2980b9") },
+            { name: "Մեքսիկա", img: createSvgImg("🇲🇽", "#27ae60") },
+            { name: "Վրաստան", img: createSvgImg("🇬🇪", "#c0392b") },
+            { name: "Մեծ Բրիտանիա", img: createSvgImg("🇬🇧", "#2980b9") },
+            { name: "Շվեդիա", img: createSvgImg("🇸🇪", "#f1c40f") },
+            { name: "Շվեյցարիա", img: createSvgImg("🇨🇭", "#e74c3c") }
+        ],
+        food: [
+            { name: "Խնձոր", img: createSvgImg("🍎", "#e74c3c") },
+            { name: "Բանան", img: createSvgImg("🍌", "#f1c40f") },
+            { name: "Նարինջ", img: createSvgImg("🍊", "#e67e22") },
+            { name: "Խաղող", img: createSvgImg("🍇", "#8e44ad") },
+            { name: "Ծիրան", img: createSvgImg("🍑", "#d35400") },
+            { name: "Տանձ", img: createSvgImg("🍐", "#2ecc71") },
+            { name: "Ելակ", img: createSvgImg("🍓", "#c0392b") },
+            { name: "Ձմերուկ", img: createSvgImg("🍉", "#27ae60") },
+            { name: "Սեխ", img: createSvgImg("🍈", "#f39c12") },
+            { name: "Կեռաս", img: createSvgImg("🍒", "#9b59b6") },
+            { name: "Լոլիկ", img: createSvgImg("🍅", "#e74c3c") },
+            { name: "Վարունգ", img: createSvgImg("🥒", "#2ecc71") },
+            { name: "Գազար", img: createSvgImg("🥕", "#e67e22") },
+            { name: "Կարտոֆիլ", img: createSvgImg("🥔", "#d35400") },
+            { name: "Տաքդեղ", img: createSvgImg("🌶️", "#c0392b") },
+            { name: "Սմբուկ", img: createSvgImg("🍆", "#8e44ad") },
+            { name: "Սոխ", img: createSvgImg("🧅", "#f39c12") },
+            { name: "Սխտոր", img: createSvgImg("🧄", "#ecf0f1") },
+            { name: "Բրոկոլի", img: createSvgImg("🥦", "#27ae60") },
+            { name: "Կաղամբ", img: createSvgImg("🥬", "#1abc9c") }
+        ],
+        vehicles: [
+            { name: "Մեքենա", img: createSvgImg("🚗", "#e74c3c") },
+            { name: "Ավտոբուս", img: createSvgImg("🚌", "#f1c40f") },
+            { name: "Բեռնատար", img: createSvgImg("🚚", "#3498db") },
+            { name: "Հեծանիվ", img: createSvgImg("🚲", "#2ecc71") },
+            { name: "Մոտոցիկլետ", img: createSvgImg("🏍️", "#e67e22") },
+            { name: "Գնացք", img: createSvgImg("🚂", "#34495e") },
+            { name: "Ինքնաթիռ", img: createSvgImg("✈️", "#2980b9") },
+            { name: "Ուղղաթիռ", img: createSvgImg("🚁", "#9b59b6") },
+            { name: "Նավ", img: createSvgImg("🚢", "#16a085") },
+            { name: "Նավակ", img: createSvgImg("🚤", "#d35400") },
+            { name: "Շտապօգնություն", img: createSvgImg("🚑", "#c0392b") },
+            { name: "Ոստիկանական", img: createSvgImg("🚓", "#2980b9") },
+            { name: "Հրշեջ մեքենա", img: createSvgImg("🚒", "#e74c3c") },
+            { name: "Տաքսի", img: createSvgImg("🚕", "#f39c12") },
+            { name: "Տրակտոր", img: createSvgImg("🚜", "#27ae60") },
+            { name: "Սկուտեր", img: createSvgImg("🛴", "#1abc9c") },
+            { name: "Օդապարիկ", img: createSvgImg("🎈", "#e91e63") },
+            { name: "Տրամվայ", img: createSvgImg("🚃", "#f39c12") },
+            { name: "Մետրո", img: createSvgImg("🚇", "#7f8c8d") },
+            { name: "Հրթիռ", img: createSvgImg("🚀", "#8e44ad") }
+        ],
+        sports: [
+            { name: "Ֆուտբոլ", img: createSvgImg("⚽", "#27ae60") },
+            { name: "Բասկետբոլ", img: createSvgImg("🏀", "#e67e22") },
+            { name: "Վոլեյբոլ", img: createSvgImg("🏐", "#f39c12") },
+            { name: "Թենիս", img: createSvgImg("🎾", "#1abc9c") },
+            { name: "Շախմատ", img: createSvgImg("♟️", "#34495e") },
+            { name: "Լող", img: createSvgImg("🏊‍♂️", "#2980b9") },
+            { name: "Բոքս", img: createSvgImg("🥊", "#c0392b") },
+            { name: "Դահուկասպորտ", img: createSvgImg("⛷️", "#3498db") },
+            { name: "Հոկեյ", img: createSvgImg("🏒", "#7f8c8d") },
+            { name: "Հեծանվասպորտ", img: createSvgImg("🚴‍♂️", "#2ecc71") },
+            { name: "Մարմնամարզություն", img: createSvgImg("🤸‍♀️", "#e91e63") },
+            { name: "Ըմբշամարտ", img: createSvgImg("🤼‍♂️", "#d35400") },
+            { name: "Վազք", img: createSvgImg("🏃‍♂️", "#f1c40f") },
+            { name: "Աղեղնաձգություն", img: createSvgImg("🏹", "#16a085") },
+            { name: "Գոլֆ", img: createSvgImg("⛳", "#27ae60") },
+            { name: "Բեյսբոլ", img: createSvgImg("⚾", "#e74c3c") },
+            { name: "Ռեգբի", img: createSvgImg("🏉", "#d35400") },
+            { name: "Սերֆինգ", img: createSvgImg("🏄‍♂️", "#3498db") },
+            { name: "Ձիասպորտ", img: createSvgImg("🏇", "#8e44ad") },
+            { name: "Ավտոսպորտ", img: createSvgImg("🏎️", "#c0392b") }
+        ]
+    };
+
+    const presetQuestions = {
+        professions: ["Հին մասնագիտություն է՞:", "Սպիտակ խալաթ հագնո՞ւմ է:", "Համազգեստ կրո՞ւմ է:", "Արվեստի հետ կապ ունի՞:", "Սպորտի՞ հետ է կապված:", "Համակարգչով աշխատո՞ւմ է:", "Մարդկանց բուժո՞ւմ է:", "Վտանգավոր աշխատանք է՞:", "Դրսո՞ւմ է աշխատում:", "Բարձրագույն կրթություն պետք է՞:", "Գիշերային հերթափոխ ունի՞:", "Երեխաների հետ աշխատո՞ւմ է:", "Բեմի կամ ֆիլմերի հետ կապ ունի՞:"],
+        pets: ["Տանն է՞ ապրում:", "Փետուրներ ունի՞:", "Ձու ածո՞ւմ է:", "Չորս ոտք ունի՞:", "Կաթ տալի՞ս է:", "Ձայն է՞ հանում (հաչում/մյաուում):", "Փո՞քր է:", "Միս ուտո՞ւմ է:", "Խոտակեր է՞:", "Ջրում լողո՞ւմ է:", "Վանդակում պահվո՞ւմ է:", "Գյուղատնտեսական կենդանի է՞:"],
+        animals: ["Չորս ոտք ունի՞:", "Թռչո՞ւն է:", "Ջրային կենդանի է՞:", "Գիշատիչ է՞:", "Փո՞քր է:", "Պոչ ունի՞:", "Ծառերի վրա ապրո՞ւմ է:", "Սառը կլիմայում է՞ ապրում:", "Ջունգլիներում/Աֆրիկայում է՞ ապրում:", "Սողուն է՞:", "Գիշերային կենդանի է՞:"],
+        tools: ["Մետաղյա՞ է:", "Փայտյա մաս ունի՞:", "Էլեկտրական է՞:", "Շինարարական է՞:", "Խոհանոցային է՞:", "Կտրող/ծակող գործիք է՞:", "Այգեգործական է՞:", "Չափման գործիք է՞:", "Ձեռքով է՞ աշխատում:", "Լարերով կամ մարտկոցով է՞:"],
+        countries: ["Եվրոպայո՞ւմ է:", "Ասիայո՞ւմ է:", "Ամերիկա աշխարհամասո՞ւմ է:", "Ծովային ելք ունի՞:", "Դրոշի վրա կարմիր գույն կա՞:", "Դրոշի վրա կապույտ գույն կա՞:", "Դրոշի վրա սպիտակ գույն կա՞:", "Դրոշի վրա դեղին/ոսկեգույն կա՞:", "Մեծ տարածք ունի՞:", "Հայաստանին մո՞տ է:", "Կղզի-երկիր է՞:"],
+        food: ["Թփի վրա է՞ աճում:", "Մեկամյա բույս է՞:", "Միրգ է՞:", "Բանջարեղեն է՞:", "Քաղցր է՞:", "Կարմիր գույնի է՞:", "Կանաչ գույնի է՞:", "Դեղին/նարնջագույն է՞:", "Ծառի վրա է՞ աճում:", "Հողի տակ (արմատ) է՞ աճում:", "Հյութալի՞ է:", "Կորիզ ունի՞:", "Աղցանների մեջ օգտագործվո՞ւմ է:"],
+        vehicles: ["Թռչո՞ւմ է:", "Ջրի վրա է՞ լողում:", "Անիվներ ունի՞:", "Հատուկ ծառայության է՞:", "Մեծ է՞:", "Ռելսերի վրայով է՞ գնում:", "Էլեկտրական է՞:", "Շարժիչ ունի՞:", "Հասարակական տրանսպորտ է՞:", "Վարորդական իրավունք պետք է՞:"],
+        sports: ["Գնդակով է՞ խաղացվում:", "Թիմային սպորտ է՞:", "Ձմեռային սպորտ է՞:", "Ջրային սպորտ է՞:", "Մենամարտ է՞:", "Դահլիճում է՞ խաղացվում:", "Օլիմպիական սպորտ է՞:", "Ցանց կամ դարպաս ունի՞:", "Ռակետով կամ մահակով է՞:", "Մտավոր սպորտ է՞:"]
+    };
+
+    let roomRef = null;
+    let myRole = null; 
+    let mySecret = null;
+    let selectedCategory = 'professions';
+    let lastQuestionTimestamp = 0;
+    let lastAnswerTimestamp = 0;
+    let gameOver = false;
+    let oneCardLeftLogged = false;
+
+    function populateQuickQuestions(catKey) {
+        const select = document.getElementById('quick-questions');
+        select.innerHTML = '<option value="">-- Ընտրիր պատրաստի հարց կամ գրիր ինքդ --</option>';
+        if (presetQuestions[catKey]) {
+            presetQuestions[catKey].forEach(q => {
+                const opt = document.createElement('option');
+                opt.value = q;
+                opt.innerText = q;
+                select.appendChild(opt);
+            });
+        }
+    }
+
+    function applyQuickQuestion() {
+        const val = document.getElementById('quick-questions').value;
+        if (val) document.getElementById('question-input').value = val;
+    }
+
+    function createRoom() {
+        const randomCode = Math.floor(1000 + Math.random() * 9000).toString();
+        selectedCategory = document.getElementById('category-select').value;
+        myRole = 'host';
+
+        roomRef = db.ref('rooms/' + randomCode);
+        roomRef.set({
+            category: selectedCategory,
+            status: 'waiting',
+            currentTurn: 'host',
+            firstAsker: 'host',
+            turnStage: 'asking',
+            createdAt: Date.now()
+        });
+
+        startRoomSession(randomCode);
+        log("👑 Ստեղծվեց սենյակ: " + randomCode + " (Սպասեք Խաղացող 2-ին)");
+    }
+
+    // ՍԵՆՅԱԿՈՒՄ ՄԱՍՆԱԿԻՑՆԵՐԻ ՔԱՆԱԿԻ ՍՏՈՒԳՈՒՄ (ԱՌԱՎԵԼԱԳՈՒՅՆԸ 2 ՄԱՍՆԱԿԻՑ)
+    function joinRoom() {
+        const code = document.getElementById('join-room-code').value.trim();
+        if (code.length !== 4) return alert("Խնդրում ենք մուտքագրել 4-նիշ ID!");
+
+        myRole = 'peer';
+        roomRef = db.ref('rooms/' + code);
+
+        roomRef.once('value', snapshot => {
+            if (!snapshot.exists()) {
+                alert("Այս ID-ով սենյակ չի գտնվել!");
+                return;
+            }
+
+            const data = snapshot.val();
+            // Եթե սենյակի կարգավիճակը 'waiting' չէ, ուրեմն 2 մասնակիցներն արդեն ներսում են
+            if (data.status !== 'waiting') {
+                alert("❌ Այս սենյակում արդեն կան 2 մասնակիցներ (սենյակը զբաղված է)!");
+                return;
+            }
+
+            roomRef.update({ status: 'connected' });
+            startRoomSession(code);
+            log("🔗 Միացաք սենյակին: " + code);
+        });
+    }
+
+    function startRoomSession(code) {
+        document.getElementById('display-room-code').innerText = code;
+        document.getElementById('setup').classList.add('hidden');
+        document.getElementById('game').classList.remove('hidden');
+
+        roomRef.on('value', snapshot => {
+            const data = snapshot.val();
+            if (!data) return;
+
+            if (!data.winner && gameOver) {
+                resetClientState(data.category);
+            }
+
+            if (data.winner) {
+                gameOver = true;
+                document.getElementById('restart-box').classList.remove('hidden');
+                document.getElementById('restart-category-select').value = data.category || selectedCategory;
+
+                if (data.winner === 'draw') {
+                    document.getElementById('status-text').innerText = `🤝 ՈՉ-ՈՔԻ! (${data.winReason})`;
+                    log(`🤝 Խաղն ավարտվեց ոչ-ոքի։ ${data.winReason}`);
+                } else if (data.winner === myRole) {
+                    document.getElementById('status-text').innerText = `🎉 ԴՈՒ ՀԱՂԹԵՑԻՐ! (${data.winReason})`;
+                    log(`🏆 Դուք հաղթեցիք։ ${data.winReason}`);
+                } else {
+                    document.getElementById('status-text').innerText = `❌ ԴՈՒ ՊԱՐՏՎԵՑԻՐ! Մրցակիցը հաղթեց (${data.winReason})`;
+                    log(`❌ Մրցակիցը հաղթեց։ ${data.winReason}`);
+                }
+                enableAsking(false);
+                enableAnswering(false);
+                return;
+            } else {
+                document.getElementById('restart-box').classList.add('hidden');
+            }
+
+            if (data.category && data.category !== selectedCategory) {
+                selectedCategory = data.category;
+                renderBoard(selectedCategory);
+                populateQuickQuestions(selectedCategory);
+            }
+
+            if (data.lastQuestion && data.lastQuestion.timestamp > lastQuestionTimestamp) {
+                lastQuestionTimestamp = data.lastQuestion.timestamp;
+                if (data.lastQuestion.sender !== myRole) {
+                    log("❓ Հարց. " + data.lastQuestion.text);
+                    document.getElementById('incoming-question').innerText = `❓ Հարց: "${data.lastQuestion.text}"`;
+                }
+            }
+
+            if (data.lastAnswer && data.lastAnswer.timestamp > lastAnswerTimestamp) {
+                lastAnswerTimestamp = data.lastAnswer.timestamp;
+                if (data.lastAnswer.sender !== myRole) {
+                    log("💬 Պատասխան. **" + data.lastAnswer.text + "**");
+                }
+            }
+
+            const currentTurn = data.currentTurn || 'host';
+            const turnStage = data.turnStage || 'asking';
+
+            updateTurnUI(currentTurn, turnStage);
+        });
+
+        renderBoard(selectedCategory);
+        populateQuickQuestions(selectedCategory);
+    }
+
+    function resetClientState(catKey) {
+        gameOver = false;
+        mySecret = null;
+        oneCardLeftLogged = false;
+        lastQuestionTimestamp = 0;
+        lastAnswerTimestamp = 0;
+
+        document.getElementById('my-card-header').classList.add('hidden');
+        document.getElementById('controls').classList.add('hidden');
+        document.getElementById('restart-box').classList.add('hidden');
+        document.getElementById('incoming-question').innerText = "(Դեռ հարց չկա)";
+
+        selectedCategory = catKey;
+        renderBoard(selectedCategory);
+        populateQuickQuestions(selectedCategory);
+
+        document.getElementById('status-text').innerText = "Ընտրիր քո գաղտնի քարտը ցուցակից...";
+        log(`🔄 --- ՍԿՍՎԵՑ ՆՈՐ ԽԱՂ --- (Թեմա՝ ${catKey})`);
+    }
+
+    function restartGame() {
+        const newCat = document.getElementById('restart-category-select').value;
+        roomRef.update({
+            category: newCat,
+            winner: null,
+            winReason: null,
+            lastQuestion: null,
+            lastAnswer: null,
+            secretCards: null,
+            pendingWinner: null,
+            currentTurn: 'host',
+            firstAsker: 'host',
+            turnStage: 'asking',
+            status: 'connected', // Կարգավիճակը պահում ենք զբաղված, որ 3-րդ մասնակից չմտնի
+            restartKey: Date.now()
+        });
+    }
+
+    function updateTurnUI(currentTurn, turnStage) {
+        if (!mySecret || gameOver) return;
+
+        if (turnStage === 'final_guess') {
+            if (currentTurn === myRole) {
+                enableAsking(false);
+                document.getElementById('guess-select').disabled = false;
+                document.getElementById('guess-btn').disabled = false;
+                enableAnswering(false);
+                document.getElementById('status-text').innerText = "🚨 ՎԵՐՋԻՆ ՀՆԱՐԱՎՈՒԹՅՈՒՆ․ Խաղացող 1-ը ճիշտ գուշակեց։ Գուշակիր քարտը՝ ոչ-ոքիի հասնելու համար:";
+            } else {
+                enableAsking(false);
+                enableAnswering(false);
+                document.getElementById('status-text').innerText = "⏳ Դուք ճիշտ գուշակեցիք։ Սպասում ենք մրցակցի վերջին փորձին...";
+            }
+            return;
+        }
+
+        if (currentTurn === myRole) {
+            if (turnStage === 'asking') {
+                enableAsking(true);
+                enableAnswering(false);
+                document.getElementById('status-text').innerText = "🎯 ՔՈ ՀԵՐԹՆ Է․ Տուր հարցդ կամ գուշակիր քարտը:";
+            } else if (turnStage === 'answering') {
+                enableAsking(false);
+                enableAnswering(false);
+                document.getElementById('status-text').innerText = "⏳ Սպասում ենք հակառակորդի պատասխանին...";
+            }
+        } else {
+            if (turnStage === 'asking') {
+                enableAsking(false);
+                enableAnswering(false);
+                document.getElementById('status-text').innerText = "⏳ Սպասիր, մինչև հակառակորդը հարց տա...";
+            } else if (turnStage === 'answering') {
+                enableAsking(false);
+                enableAnswering(true);
+                document.getElementById('status-text').innerText = "👉 Պատասխանիր ստացված հարցին (ԱՅՈ կամ ՈՉ):";
+            }
+        }
+    }
+
+    function renderBoard(catKey) {
+        const board = document.getElementById('board');
+        board.innerHTML = '';
+        categories[catKey].forEach((card, index) => {
+            card.id = index + 1;
+            const div = document.createElement('div');
+            div.className = 'card';
+            div.onclick = () => {
+                if (!mySecret) {
+                    mySecret = card;
+                    document.getElementById('my-card-img').src = card.img;
+                    document.getElementById('my-card-name').innerText = card.name;
+                    document.getElementById('my-card-header').classList.remove('hidden');
+                    document.getElementById('controls').classList.remove('hidden');
+
+                    roomRef.child('secretCards/' + myRole).set(card.name);
+
+                    roomRef.once('value', snapshot => {
+                        const d = snapshot.val();
+                        if (d) updateTurnUI(d.currentTurn || 'host', d.turnStage || 'asking');
+                    });
+                } else {
+                    div.classList.toggle('eliminated');
+                    updateActiveCardsList();
+                }
+            };
+            div.innerHTML = `<img src="${card.img}"><div class="card-title">${card.name}</div>`;
+            board.appendChild(div);
+        });
+
+        updateActiveCardsList();
+    }
+
+    function updateActiveCardsList() {
+        const guessSelect = document.getElementById('guess-select');
+        const activeCards = Array.from(document.querySelectorAll('.card:not(.eliminated)'));
+        const currentSelected = guessSelect.value;
+
+        guessSelect.innerHTML = '<option value="">-- Ընտրիր քարտը --</option>';
+
+        activeCards.forEach(card => {
+            const cardName = card.querySelector('.card-title').innerText;
+            const opt = document.createElement('option');
+            opt.value = cardName;
+            opt.innerText = cardName;
+            guessSelect.appendChild(opt);
+        });
+
+        if (currentSelected && Array.from(guessSelect.options).some(o => o.value === currentSelected)) {
+            guessSelect.value = currentSelected;
+        }
+
+        if (activeCards.length === 1 && mySecret) {
+            const lastCardName = activeCards[0].querySelector('.card-title').innerText;
+            guessSelect.value = lastCardName;
+            if (!oneCardLeftLogged) {
+                log(`✨ Տախտակին մնաց 1 ակտիվ քարտ՝ **${lastCardName}**։ Կարող եք կատարել վերջնական գուշակում։`);
+                oneCardLeftLogged = true;
+            }
+        } else {
+            oneCardLeftLogged = false;
+        }
+    }
+
+    function enableAsking(enable) {
+        document.getElementById('question-input').disabled = !enable;
+        document.getElementById('send-btn').disabled = !enable;
+        document.getElementById('quick-questions').disabled = !enable;
+        document.getElementById('guess-select').disabled = !enable;
+        document.getElementById('guess-btn').disabled = !enable;
+    }
+
+    function enableAnswering(enable) {
+        document.getElementById('btn-yes').disabled = !enable;
+        document.getElementById('btn-no').disabled = !enable;
+    }
+
+    function sendQuestion() {
+        const inp = document.getElementById('question-input');
+        const txt = inp.value.trim();
+        if (!txt) return;
+
+        const ts = Date.now();
+        lastQuestionTimestamp = ts;
+
+        enableAsking(false);
+
+        roomRef.update({
+            lastQuestion: { text: txt, sender: myRole, timestamp: ts },
+            turnStage: 'answering'
+        }).then(() => {
+            log("📤 Դու հարցրեցիր. " + txt);
+            inp.value = '';
+            document.getElementById('quick-questions').value = '';
+        });
+    }
+
+    function submitDirectGuess() {
+        const guessVal = document.getElementById('guess-select').value;
+        if (!guessVal) return alert("Խնդրում ենք ընտրել քարտը ցուցակից!");
+
+        if (!confirm(`Վստա՞հ ես, որ մրցակցի մտապահած քարտը "${guessVal}"-ն է:`)) return;
+
+        roomRef.once('value', snapshot => {
+            const data = snapshot.val();
+            const opponentRole = (myRole === 'host') ? 'peer' : 'host';
+            const opponentSecret = data.secretCards ? data.secretCards[opponentRole] : null;
+
+            if (!opponentSecret) {
+                alert("Մրցակիցը դեռ չի ընտրել իր քարտը!");
+                return;
+            }
+
+            const isCorrect = (guessVal === opponentSecret);
+            const firstAsker = data.firstAsker || 'host';
+
+            if (data.turnStage === 'final_guess') {
+                if (isCorrect) {
+                    roomRef.update({
+                        winner: 'draw',
+                        winReason: 'Երկու խաղացողներն էլ ճիշտ գուշակեցին (ՈՉ-ՈՔԻ)!',
+                        status: 'ended'
+                    });
+                } else {
+                    roomRef.update({
+                        winner: data.pendingWinner,
+                        winReason: `Խաղացող 1-ը ճիշտ էր գուշակել, իսկ Խաղացող 2-ը սխալվեց վերջին փորձի ժամանակ (${guessVal}):`,
+                        status: 'ended'
+                    });
+                }
+                return;
+            }
+
+            if (isCorrect) {
+                if (myRole === firstAsker) {
+                    alert("👏 Ճիշտ գուշակեցիր: Քանի որ դու առաջինն էիր սկսել, մրցակիցն ունի 1 վերջնական հնարավորություն:");
+                    roomRef.update({
+                        pendingWinner: myRole,
+                        currentTurn: opponentRole,
+                        turnStage: 'final_guess',
+                        lastQuestion: { 
+                            text: `🚨 [Խաղացող 1-ը ճիշտ գուշակեց: Ունեք 1 ՎԵՐՋԻՆ ՀՆԱՐԱՎՈՒԹՅՈՒՆ ոչ-ոքիի համար]`, 
+                            sender: myRole, 
+                            timestamp: Date.now() 
+                        }
+                    });
+                } else {
+                    roomRef.update({
+                        winner: myRole,
+                        winReason: `Ճիշտ գուշակեց քարտը (${guessVal})!`,
+                        status: 'ended'
+                    });
+                }
+            } else {
+                alert(`❌ Սխալ պատասխան (${guessVal})։ Հերթն անցնում է մրցակցին։`);
+                roomRef.update({
+                    lastQuestion: { text: `🎯 [Սխալ գուշակման փորձ: "${guessVal}"]`, sender: myRole, timestamp: Date.now() },
+                    currentTurn: opponentRole,
+                    turnStage: 'asking'
+                });
+            }
+        });
+    }
+
+    function sendAnswer(ans) {
+        const ts = Date.now();
+        lastAnswerTimestamp = ts;
+
+        enableAnswering(false);
+
+        const nextTurn = myRole; 
+
+        roomRef.update({
+            lastAnswer: { text: ans, sender: myRole, timestamp: ts },
+            currentTurn: nextTurn,
+            turnStage: 'asking'
+        }).then(() => {
+            log("📤 Քո պատասխանը. **" + ans + "**");
+        });
+    }
+
+    document.getElementById('question-input').addEventListener('keydown', function(e) {
+        if (e.key === 'Enter') sendQuestion();
+    });
+
+    function log(txt) {
+        const chat = document.getElementById('chat');
+        chat.innerHTML += `<div class="chat-msg">${txt}</div>`;
+        chat.scrollTop = chat.scrollHeight;
+    }
+</script>
+</body>
+</html>
